@@ -19,7 +19,7 @@ import {
   modelCommand,
   modelLabel,
 } from "./commands.ts";
-import { createPrompter, EOF } from "./prompter.ts";
+import { createPrompter, EOF, type Prompter } from "./prompter.ts";
 
 const PROMPT = "> ";
 
@@ -57,6 +57,81 @@ function streamAssistantText(session: AgentSession): () => void {
   });
 }
 
+/**
+ * Mutable shell state shared with command handlers. `session` can be swapped
+ * (e.g. by /new), so handlers read it through this object rather than closing
+ * over a value.
+ */
+interface ShellContext {
+  session: AgentSession;
+  prompter: Prompter;
+  /** Replace the active session (disposes the old one and rewires streaming). */
+  replaceSession(next: AgentSession): void;
+}
+
+/** A locally-handled slash command. Returning "exit" stops the REPL. */
+interface Command {
+  name: string;
+  aliases?: string[];
+  /** Argument placeholder shown in help, e.g. "[provider]". */
+  usage?: string;
+  description: string;
+  run(ctx: ShellContext, arg: string): void | "exit" | Promise<void | "exit">;
+}
+
+const COMMANDS: readonly Command[] = [
+  {
+    name: "login",
+    usage: "[provider]",
+    description: "sign in to a provider (API key)",
+    run: (ctx, arg) => loginCommand(ctx.session, ctx.prompter, arg),
+  },
+  {
+    name: "logout",
+    usage: "[provider]",
+    description: "remove a stored credential",
+    run: (ctx, arg) => logoutCommand(ctx.session, ctx.prompter, arg),
+  },
+  {
+    name: "auth",
+    description: "show credential/auth status",
+    run: (ctx) => authStatusCommand(ctx.session),
+  },
+  {
+    name: "model",
+    usage: "[query]",
+    description: "list models, or switch to a match",
+    run: (ctx, arg) => modelCommand(ctx.session, arg),
+  },
+  {
+    name: "new",
+    description: "start a fresh session",
+    run: async (ctx) => {
+      const { session } = await createAgentSession({
+        sessionManager: SessionManager.create(process.cwd()),
+      });
+      ctx.replaceSession(session);
+      console.log("started a new session\n");
+    },
+  },
+  {
+    name: "help",
+    description: "show this help",
+    run: () => printHelp(),
+  },
+  {
+    name: "exit",
+    aliases: ["quit"],
+    description: "leave",
+    run: () => "exit",
+  },
+];
+
+/** Resolve a typed command name (or alias) to its definition. */
+function findCommand(name: string): Command | undefined {
+  return COMMANDS.find((c) => c.name === name || c.aliases?.includes(name));
+}
+
 function printBanner(session: AgentSession, opts: Options): void {
   const mode = opts.inMemory
     ? "in-memory (not saved)"
@@ -69,28 +144,40 @@ function printBanner(session: AgentSession, opts: Options): void {
 }
 
 function printHelp(): void {
+  // Derived from COMMANDS so help can never drift from the dispatch table.
+  const left = (c: Command): string =>
+    `/${[c.name, ...(c.aliases ?? [])].join(", /")}${c.usage ? ` ${c.usage}` : ""}`;
+  const width = Math.max(...COMMANDS.map((c) => left(c).length));
   console.log("commands:");
-  console.log("  /login [provider]   sign in to a provider (API key)");
-  console.log("  /logout [provider]  remove a stored credential");
-  console.log("  /auth               show credential/auth status");
-  console.log("  /model [query]      list models, or switch to a match");
-  console.log("  /new                start a fresh session");
-  console.log("  /help               show this help");
-  console.log("  /exit, /quit        leave");
+  for (const c of COMMANDS) {
+    console.log(`  ${left(c).padEnd(width)}  ${c.description}`);
+  }
   console.log("anything else is sent to the agent.\n");
 }
 
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv);
 
-  let { session } = await createAgentSession({
-    sessionManager: makeSessionManager(opts),
-  });
+  let session = (
+    await createAgentSession({ sessionManager: makeSessionManager(opts) })
+  ).session;
   let unsubscribe = streamAssistantText(session);
 
   printBanner(session, opts);
 
   const prompter = createPrompter();
+
+  const ctx: ShellContext = {
+    session,
+    prompter,
+    replaceSession(next: AgentSession): void {
+      unsubscribe();
+      session.dispose();
+      session = next;
+      ctx.session = next;
+      unsubscribe = streamAssistantText(next);
+    },
+  };
 
   // Ctrl+C behaviour:
   //  - while a turn is running (busy): interrupt the turn, keep the shell open.
@@ -98,7 +185,7 @@ async function main(): Promise<void> {
   let busy = false;
   prompter.rl.on("SIGINT", () => {
     if (busy) {
-      void session.abort();
+      void ctx.session.abort();
       stdout.write("\n(interrupted)\n");
     } else {
       stdout.write("\n");
@@ -112,49 +199,23 @@ async function main(): Promise<void> {
       if (line === EOF) break;
       if (!line) continue;
 
-      // Split a leading /command from its argument.
-      const isCommand = line.startsWith("/");
-      const [cmd, ...rest] = isCommand ? line.slice(1).split(/\s+/) : [];
-      const arg = rest.join(" ");
-
-      // Locally handled commands (pi-shell owns these so no TUI is needed).
-      if (cmd === "exit" || cmd === "quit") break;
-      if (cmd === "help") {
-        printHelp();
-        continue;
-      }
-      if (cmd === "new") {
-        unsubscribe();
-        session.dispose();
-        ({ session } = await createAgentSession({
-          sessionManager: SessionManager.create(process.cwd()),
-        }));
-        unsubscribe = streamAssistantText(session);
-        console.log("started a new session\n");
-        continue;
-      }
-      if (cmd === "login") {
-        await loginCommand(session, prompter, arg);
-        continue;
-      }
-      if (cmd === "logout") {
-        await logoutCommand(session, prompter, arg);
-        continue;
-      }
-      if (cmd === "auth") {
-        await authStatusCommand(session);
-        continue;
-      }
-      if (cmd === "model") {
-        await modelCommand(session, arg);
-        continue;
+      // Locally handled slash commands (pi-shell owns these so no TUI is
+      // needed). A leading "/" with a known name dispatches here; anything
+      // else (including unknown /names) goes to the agent.
+      if (line.startsWith("/")) {
+        const [name, ...rest] = line.slice(1).split(/\s+/);
+        const command = findCommand(name ?? "");
+        if (command) {
+          if ((await command.run(ctx, rest.join(" "))) === "exit") break;
+          continue;
+        }
       }
 
       // Everything else goes to Pi. prompt() also handles Pi's own
       // slash-commands and prompt-template expansion.
       busy = true;
       try {
-        await session.prompt(line);
+        await ctx.session.prompt(line);
         stdout.write("\n");
       } catch (err) {
         console.error(
@@ -166,7 +227,7 @@ async function main(): Promise<void> {
     }
   } finally {
     unsubscribe();
-    session.dispose();
+    ctx.session.dispose();
     prompter.close();
   }
 }
