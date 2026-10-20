@@ -1,9 +1,10 @@
 # pi-shell
 
-A minimal shell-prompt interface for the [Pi](https://pi.dev) agent harness.
+Minimal shell-prompt interface for the [Pi](https://pi.dev) agent harness — no
+TUI, just clean text and persistent sessions.
 
-No TUI — just a `> ` prompt, clean streaming text output, and a persistent
-session so conversation context and history carry across turns and across runs.
+Conversation context and history carry across turns, and across runs unless
+started with `--new` or `--in-memory`.
 
 ## Requirements
 
