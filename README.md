@@ -81,3 +81,9 @@ npm test             # vitest run (unit tests for pure helpers)
 npm run test:watch   # vitest in watch mode
 npm run dev          # tsx watch
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE). Dependencies are licensed separately under their
+own terms.
+

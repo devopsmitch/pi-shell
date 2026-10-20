@@ -2,6 +2,7 @@
   "name": "pi-shell",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "A minimal shell-prompt interface for the Pi agent harness. No TUI, just a > prompt with clean text output and persistent session history.",
   "type": "module",
   "engines": {
