@@ -1,5 +1,7 @@
 # pi-shell
 
+[![CI](https://github.com/devopsmitch/pi-shell/actions/workflows/ci.yml/badge.svg)](https://github.com/devopsmitch/pi-shell/actions/workflows/ci.yml)
+
 Minimal shell-prompt interface for the [Pi](https://pi.dev) agent harness — no
 TUI, just clean text and persistent sessions.
 
