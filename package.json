@@ -4,6 +4,9 @@
   "private": true,
   "description": "A minimal shell-prompt interface for the Pi agent harness. No TUI, just a > prompt with clean text output and persistent session history.",
   "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
   "bin": {
     "pi-shell": "./src/pi-shell.ts"
   },
