@@ -12,7 +12,7 @@
  */
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { type Api, type AuthType, type Model } from "@earendil-works/pi-ai";
-import { createTerminalAuthInteraction } from "./auth-interaction.ts";
+import { AuthCancelled, createTerminalAuthInteraction } from "./auth-interaction.ts";
 import { EOF, type Prompter } from "./prompter.ts";
 
 /** Providers the user commonly uses, offered as a shortlist for /login. */
@@ -87,6 +87,10 @@ export async function loginCommand(
     console.log(`\nsigned in to ${providerId} (${credential.type})`);
     await reportAvailability(session, providerId);
   } catch (err) {
+    if (err instanceof AuthCancelled) {
+      console.log("\ncancelled");
+      return;
+    }
     console.error(`\nlogin failed: ${err instanceof Error ? err.message : String(err)}`);
     if (authType === "api_key") {
       console.error(

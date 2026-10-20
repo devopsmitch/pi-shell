@@ -49,6 +49,10 @@ export function createPrompter(): Prompter {
 
   rl.on("close", () => {
     closed = true;
+    // If a question is in flight when stdin closes (EOF/Ctrl+D), rl.question()
+    // never settles. Abort it so the pending ask()/askSecret() resolves to EOF
+    // instead of hanging forever.
+    controller?.abort();
   });
 
   function isAbortOrClose(err: unknown): boolean {

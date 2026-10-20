@@ -17,7 +17,7 @@ import type { AuthEvent, AuthInteraction, AuthPrompt } from "@earendil-works/pi-
 import { EOF, type Prompter } from "./prompter.ts";
 
 /** Thrown when the user cancels a login prompt (EOF / Ctrl+D). */
-class AuthCancelled extends Error {
+export class AuthCancelled extends Error {
   constructor() {
     super("login cancelled");
     this.name = "AuthCancelled";
