@@ -25,8 +25,6 @@ export interface Prompter {
   readonly rl: readline.Interface;
   /** True once stdin has reached EOF or the interface was closed. */
   readonly closed: boolean;
-  /** True while a question is awaiting input (used to distinguish idle state). */
-  readonly waiting: boolean;
   /** Abort the in-flight question, if any. The pending ask() resolves to EOF. */
   cancel(): void;
   close(): void;
@@ -44,7 +42,6 @@ export function createPrompter(): Prompter {
   });
 
   let closed = false;
-  let waiting = false;
   let controller: AbortController | undefined;
 
   rl.on("close", () => {
@@ -92,7 +89,6 @@ export function createPrompter(): Prompter {
     }
 
     controller = new AbortController();
-    waiting = true;
     try {
       const answer = await rl.question(message, { signal: controller.signal });
       if (opts?.secret && isTTY) stdout.write("\n");
@@ -101,7 +97,6 @@ export function createPrompter(): Prompter {
       if (isAbortOrClose(err)) return EOF;
       throw err;
     } finally {
-      waiting = false;
       controller = undefined;
       if (opts?.secret && isTTY) masked._writeToOutput = original;
     }
@@ -112,10 +107,6 @@ export function createPrompter(): Prompter {
 
     get closed() {
       return closed;
-    },
-
-    get waiting() {
-      return waiting;
     },
 
     ask(message: string): Promise<string | typeof EOF> {

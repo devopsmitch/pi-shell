@@ -22,8 +22,6 @@ import {
 } from "./model-select.ts";
 import { EOF, type Prompter } from "./prompter.ts";
 
-export { hasRealModel, modelLabel } from "./model-select.ts";
-
 /** Providers the user commonly uses, offered as a shortlist for /login. */
 const SUGGESTED_PROVIDERS: readonly { id: string; label: string; authTypes: AuthType[] }[] = [
   { id: "anthropic", label: "Anthropic (Claude)", authTypes: ["oauth", "api_key"] },
@@ -81,7 +79,7 @@ export async function loginCommand(
     await reportAvailability(session, providerId);
   } catch (err) {
     if (err instanceof AuthCancelled) {
-      console.log("\ncancelled");
+      console.log("cancelled");
       return;
     }
     console.error(`\nlogin failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -131,11 +129,12 @@ export async function authStatusCommand(session: AgentSession): Promise<void> {
   // Also show ambient-configured providers from the suggested set that have no
   // stored credential but resolve via environment (e.g. Bedrock AWS profile).
   console.log("\nprovider status:");
+  const width = Math.max(...SUGGESTED_PROVIDERS.map((p) => p.id.length));
   for (const p of SUGGESTED_PROVIDERS) {
     const status = runtime.getProviderAuthStatus(p.id);
     const mark = status.configured ? "configured" : "not configured";
     const src = status.source ? ` [${status.source}]` : "";
-    console.log(`  ${p.id.padEnd(12)} ${mark}${src}`);
+    console.log(`  ${p.id.padEnd(width)}  ${mark}${src}`);
   }
 }
 

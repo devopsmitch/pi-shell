@@ -146,9 +146,9 @@ function printHelp(): void {
 async function main(): Promise<void> {
   const opts = parseOptions(process.argv.slice(2));
 
-  let session = (
-    await createAgentSession({ sessionManager: makeSessionManager(opts) })
-  ).session;
+  const { session } = await createAgentSession({
+    sessionManager: makeSessionManager(opts),
+  });
   let unsubscribe = streamAssistantText(session);
 
   printBanner(session, opts);
@@ -160,8 +160,7 @@ async function main(): Promise<void> {
     prompter,
     replaceSession(next: AgentSession): void {
       unsubscribe();
-      session.dispose();
-      session = next;
+      ctx.session.dispose();
       ctx.session = next;
       unsubscribe = streamAssistantText(next);
     },
