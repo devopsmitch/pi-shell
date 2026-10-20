@@ -92,25 +92,24 @@ async function main(): Promise<void> {
 
   const prompter = createPrompter();
 
-  // Ctrl+C: abort the active turn if one is running; otherwise exit cleanly.
-  let exiting = false;
+  // Ctrl+C behaviour:
+  //  - while a turn is running (busy): interrupt the turn, keep the shell open.
+  //  - while idle at the prompt: cancel the prompt, which exits the loop.
+  let busy = false;
   prompter.rl.on("SIGINT", () => {
-    void (async () => {
-      try {
-        await session.abort();
-        stdout.write("\n(interrupted)\n");
-        prompter.rl.prompt();
-      } catch {
-        exiting = true;
-        prompter.close();
-      }
-    })();
+    if (busy) {
+      void session.abort();
+      stdout.write("\n(interrupted)\n");
+    } else {
+      stdout.write("\n");
+      prompter.cancel();
+    }
   });
 
   try {
     for (;;) {
       const line = await prompter.ask(PROMPT);
-      if (exiting || line === EOF) break;
+      if (line === EOF) break;
       if (!line) continue;
 
       // Split a leading /command from its argument.
@@ -153,6 +152,7 @@ async function main(): Promise<void> {
 
       // Everything else goes to Pi. prompt() also handles Pi's own
       // slash-commands and prompt-template expansion.
+      busy = true;
       try {
         await session.prompt(line);
         stdout.write("\n");
@@ -160,6 +160,8 @@ async function main(): Promise<void> {
         console.error(
           `\nerror: ${err instanceof Error ? err.message : String(err)}`,
         );
+      } finally {
+        busy = false;
       }
     }
   } finally {
