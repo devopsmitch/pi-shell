@@ -70,8 +70,15 @@ export function createPrompter(): Prompter {
     if (closed) return EOF;
 
     // Mask typed characters for secrets by overriding how readline echoes
-    // input. `_writeToOutput` is a Node-internal (undocumented) readline method;
-    // this is the conventional masking approach and is guarded to TTY only.
+    // input.
+    //
+    // NOTE: `_writeToOutput` is a private, undocumented readline method. There
+    // is no public API for masked input in node:readline, so this is the
+    // conventional workaround. It is fragile across Node versions (a rename
+    // would silently disable masking) and is therefore guarded to TTY only and
+    // restored in `finally`. No feedback characters (e.g. "*") are shown; the
+    // input is simply not echoed. If this breaks, prefer an env var or
+    // `/login`-free credential setup over echoing the secret.
     const masked = rl as unknown as { _writeToOutput?: (s: string) => void };
     const original = masked._writeToOutput?.bind(rl);
     if (opts?.secret && isTTY) {
