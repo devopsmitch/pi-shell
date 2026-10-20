@@ -13,7 +13,16 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { type Api, type AuthType, type Model } from "@earendil-works/pi-ai";
 import { AuthCancelled, createTerminalAuthInteraction } from "./auth-interaction.ts";
+import {
+  hasRealModel,
+  matchModels,
+  modelLabel,
+  resolveProviderChoice,
+  sameModel,
+} from "./model-select.ts";
 import { EOF, type Prompter } from "./prompter.ts";
+
+export { hasRealModel, modelLabel } from "./model-select.ts";
 
 /** Providers the user commonly uses, offered as a shortlist for /login. */
 const SUGGESTED_PROVIDERS: readonly { id: string; label: string; authTypes: AuthType[] }[] = [
@@ -24,32 +33,16 @@ const SUGGESTED_PROVIDERS: readonly { id: string; label: string; authTypes: Auth
   { id: "openrouter", label: "OpenRouter", authTypes: ["api_key"] },
 ];
 
-/**
- * Pi uses a placeholder model with provider/id "unknown" when nothing is
- * authenticated. Treat that as "no model selected".
- */
-export function hasRealModel(model: Model<Api> | undefined): model is Model<Api> {
-  return !!model && model.provider !== "unknown" && model.id !== "unknown";
-}
-
-/** Human-readable label for a model, or a hint when none is selected. */
-export function modelLabel(model: Model<Api> | undefined): string {
-  return hasRealModel(model)
-    ? `${model.provider}/${model.id}`
-    : "(none — use /login then /model)";
-}
-
 async function pickProvider(prompter: Prompter): Promise<string | undefined> {
   console.log("Choose a provider to sign in to:");
   SUGGESTED_PROVIDERS.forEach((p, i) => console.log(`  ${i + 1}) ${p.label}  (${p.id})`));
   console.log("  or type a provider id directly");
   const raw = await prompter.ask(`provider: `);
-  if (raw === EOF || !raw) return undefined;
-  const n = Number.parseInt(raw, 10);
-  if (Number.isInteger(n) && n >= 1 && n <= SUGGESTED_PROVIDERS.length) {
-    return SUGGESTED_PROVIDERS[n - 1]!.id;
-  }
-  return raw;
+  if (raw === EOF) return undefined;
+  return resolveProviderChoice(
+    raw,
+    SUGGESTED_PROVIDERS.map((p) => p.id),
+  );
 }
 
 /** /login — authenticate a provider. */
@@ -161,8 +154,6 @@ export async function modelCommand(session: AgentSession, arg: string): Promise<
   }
 
   const current = session.model;
-  const isCurrent = (m: Model<Api>): boolean =>
-    hasRealModel(current) && m.id === current.id && m.provider === current.provider;
 
   if (!query) {
     console.log(`current model: ${modelLabel(current)}`);
@@ -172,18 +163,14 @@ export async function modelCommand(session: AgentSession, arg: string): Promise<
     }
     console.log("available models:");
     for (const m of chat) {
-      console.log(`  ${m.provider}/${m.id}  (${m.name})${isCurrent(m) ? " *" : ""}`);
+      const marker = hasRealModel(current) && sameModel(current, m) ? " *" : "";
+      console.log(`  ${m.provider}/${m.id}  (${m.name})${marker}`);
     }
     console.log("\nswitch with: /model <substring>");
     return;
   }
 
-  const matches = chat.filter(
-    (m) =>
-      m.id.toLowerCase().includes(query) ||
-      m.name.toLowerCase().includes(query) ||
-      `${m.provider}/${m.id}`.toLowerCase().includes(query),
-  );
+  const matches = matchModels(chat, query);
 
   if (matches.length === 0) {
     console.log(`no model matches "${query}"`);

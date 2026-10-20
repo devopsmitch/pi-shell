@@ -12,29 +12,17 @@ import {
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
 import { stdout } from "node:process";
+import { parseOptions, type Options } from "./args.ts";
 import {
   authStatusCommand,
   loginCommand,
   logoutCommand,
   modelCommand,
-  modelLabel,
 } from "./commands.ts";
+import { modelLabel } from "./model-select.ts";
 import { createPrompter, EOF, type Prompter } from "./prompter.ts";
 
 const PROMPT = "> ";
-
-interface Options {
-  fresh: boolean;
-  inMemory: boolean;
-}
-
-function parseArgs(argv: string[]): Options {
-  const args = new Set(argv.slice(2));
-  return {
-    fresh: args.has("--new") || args.has("-n"),
-    inMemory: args.has("--in-memory"),
-  };
-}
 
 /** Choose how session history is stored based on CLI flags. */
 function makeSessionManager(opts: Options): SessionManager {
@@ -156,7 +144,7 @@ function printHelp(): void {
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv);
+  const opts = parseOptions(process.argv.slice(2));
 
   let session = (
     await createAgentSession({ sessionManager: makeSessionManager(opts) })

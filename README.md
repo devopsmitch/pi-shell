@@ -74,5 +74,7 @@ Built on the Pi TypeScript SDK (`@earendil-works/pi-coding-agent`):
 
 ```bash
 npm run typecheck    # tsc --noEmit
+npm test             # vitest run (unit tests for pure helpers)
+npm run test:watch   # vitest in watch mode
 npm run dev          # tsx watch
 ```

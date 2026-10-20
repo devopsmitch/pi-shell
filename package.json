@@ -10,7 +10,9 @@
   "scripts": {
     "start": "tsx src/pi-shell.ts",
     "dev": "tsx watch src/pi-shell.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "1.2.0"
@@ -18,6 +20,7 @@
   "devDependencies": {
     "@types/node": "24.10.1",
     "tsx": "4.20.6",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
   }
 }
