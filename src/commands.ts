@@ -11,7 +11,7 @@
  * via API keys or ambient credentials.
  */
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { isModelType, type Api, type AuthType, type Model } from "@earendil-works/pi-ai";
+import { type Api, type AuthType, type Model } from "@earendil-works/pi-ai";
 import { createTerminalAuthInteraction } from "./auth-interaction.ts";
 import { EOF, type Prompter } from "./prompter.ts";
 
@@ -147,21 +147,20 @@ export async function modelCommand(session: AgentSession, arg: string): Promise<
   const runtime = session.modelRuntime;
   const query = arg.trim().toLowerCase();
 
-  let available;
+  // Only chat models are selectable as the session model.
+  let chat: readonly Model<Api>[];
   try {
-    available = await runtime.getAllAvailable();
+    chat = await runtime.getAvailableOfType("chat");
   } catch (err) {
     console.error(`could not list models: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
-  // Only chat models are selectable as the session model.
-  const chat: Model<never>[] = available.filter(
-    (m): m is Model<never> => isModelType(m, "chat"),
-  );
+  const current = session.model;
+  const isCurrent = (m: Model<Api>): boolean =>
+    hasRealModel(current) && m.id === current.id && m.provider === current.provider;
 
   if (!query) {
-    const current = session.model;
     console.log(`current model: ${modelLabel(current)}`);
     if (chat.length === 0) {
       console.log("no available models — sign in to a provider first with /login");
@@ -169,8 +168,7 @@ export async function modelCommand(session: AgentSession, arg: string): Promise<
     }
     console.log("available models:");
     for (const m of chat) {
-      const here = hasRealModel(current) && m.id === current.id && m.provider === current.provider ? " *" : "";
-      console.log(`  ${m.provider}/${m.id}  (${m.name})${here}`);
+      console.log(`  ${m.provider}/${m.id}  (${m.name})${isCurrent(m) ? " *" : ""}`);
     }
     console.log("\nswitch with: /model <substring>");
     return;
