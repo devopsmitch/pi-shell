@@ -10,7 +10,7 @@ started with `--new` or `--in-memory`.
 
 ## Requirements
 
-- Node.js 22.19+ (developed on v24)
+- Node.js 24+
 - A configured Pi provider/credentials. If you haven't set one up, run `pi`
   once and use `/login`, or configure an API key. pi-shell reuses Pi's standard
   settings, credentials, and resource discovery.
