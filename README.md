@@ -30,12 +30,14 @@ npm start -- --in-memory   # ephemeral session, nothing written to disk
 
 Typed at the `> ` prompt:
 
-- `/login [provider]` — sign in to a provider. With no argument, pick from a
-  shortlist (Anthropic, OpenAI, Bedrock, Gemini, OpenRouter) or type any
-  provider id. Stage 1 supports API-key sign-in; OAuth subscription sign-in
-  (Claude Pro, ChatGPT) is Stage 2 and not yet wired.
+- `/login [provider]` — sign in to a provider. With no argument, lists every
+  provider Pi supports (derived from the SDK, so new providers appear
+  automatically); or pass a provider id directly, e.g. `/login amazon-bedrock`.
+  The auth method (API key vs OAuth) is taken from the provider itself. Stage 1
+  supports API-key sign-in; OAuth subscription sign-in (Claude Pro, ChatGPT) is
+  Stage 2 and not yet wired.
 - `/logout [provider]` — remove a stored credential.
-- `/auth` — show stored credentials and per-provider auth status.
+- `/auth` — show configured providers (stored credentials and ambient auth).
 - `/model [query]` — list available models, or switch to the one matching
   `query` (substring of provider/id/name).
 - `/new` — start a fresh persistent session.
@@ -52,7 +54,8 @@ prompt-template expansion.
 pi-shell reuses Pi's standard credential storage (`~/.pi/agent/auth.json`) and
 ambient credentials, so you can authenticate any of these ways:
 
-- `/login <provider>` inside pi-shell (API-key providers).
+- `/login <provider>` inside pi-shell (API-key providers; run `/login` with no
+  argument to see every supported provider id).
 - An environment variable before launch, e.g. `export OPENROUTER_API_KEY=...`
   or `export GEMINI_API_KEY=...`.
 - Ambient cloud credentials (e.g. an AWS profile for Bedrock).

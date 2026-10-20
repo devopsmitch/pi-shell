@@ -45,19 +45,3 @@ export function matchModels<T extends ModelRef>(models: readonly T[], query: str
       `${m.provider}/${m.id}`.toLowerCase().includes(q),
   );
 }
-
-/**
- * Resolve a provider-menu answer to a provider id.
- *
- * Accepts a 1-based index into `ids`, or a provider id typed directly. Returns
- * undefined for empty input (treated as cancel by the caller).
- */
-export function resolveProviderChoice(raw: string, ids: readonly string[]): string | undefined {
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-  const n = Number.parseInt(trimmed, 10);
-  if (Number.isInteger(n) && n >= 1 && n <= ids.length) {
-    return ids[n - 1];
-  }
-  return trimmed;
-}

@@ -5,7 +5,6 @@ import {
   matchModels,
   modelLabel,
   type ModelRef,
-  resolveProviderChoice,
   sameModel,
 } from "../src/model-select.ts";
 
@@ -82,31 +81,5 @@ describe("matchModels", () => {
 
   it("can return multiple matches (ambiguous)", () => {
     expect(matchModels(MODELS, "claude")).toHaveLength(2);
-  });
-});
-
-describe("resolveProviderChoice", () => {
-  const ids = ["anthropic", "openai", "bedrock"];
-
-  it("returns undefined for empty input", () => {
-    expect(resolveProviderChoice("", ids)).toBeUndefined();
-    expect(resolveProviderChoice("  ", ids)).toBeUndefined();
-  });
-
-  it("resolves a 1-based index", () => {
-    expect(resolveProviderChoice("1", ids)).toBe("anthropic");
-    expect(resolveProviderChoice("3", ids)).toBe("bedrock");
-  });
-
-  it("treats an out-of-range number as a literal id", () => {
-    expect(resolveProviderChoice("9", ids)).toBe("9");
-  });
-
-  it("returns a directly typed provider id", () => {
-    expect(resolveProviderChoice("gemini", ids)).toBe("gemini");
-  });
-
-  it("trims surrounding whitespace", () => {
-    expect(resolveProviderChoice("  openai  ", ids)).toBe("openai");
   });
 });

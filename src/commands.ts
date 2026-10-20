@@ -11,36 +11,39 @@
  * via API keys or ambient credentials.
  */
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { type Api, type AuthType, type Model } from "@earendil-works/pi-ai";
+import { type Api, type Model } from "@earendil-works/pi-ai";
 import { AuthCancelled, createTerminalAuthInteraction } from "./auth-interaction.ts";
 import {
   hasRealModel,
   matchModels,
   modelLabel,
-  resolveProviderChoice,
   sameModel,
 } from "./model-select.ts";
+import {
+  formatProviderColumns,
+  preferredAuthType,
+  providerInfos,
+  type ProviderInfo,
+} from "./providers.ts";
 import { EOF, type Prompter } from "./prompter.ts";
 
-/** Providers the user commonly uses, offered as a shortlist for /login. */
-const SUGGESTED_PROVIDERS: readonly { id: string; label: string; authTypes: AuthType[] }[] = [
-  { id: "anthropic", label: "Anthropic (Claude)", authTypes: ["oauth", "api_key"] },
-  { id: "openai", label: "OpenAI (ChatGPT)", authTypes: ["oauth", "api_key"] },
-  { id: "bedrock", label: "Amazon Bedrock", authTypes: ["api_key"] },
-  { id: "gemini", label: "Google Gemini", authTypes: ["api_key"] },
-  { id: "openrouter", label: "OpenRouter", authTypes: ["api_key"] },
-];
+/** Load and distil the providers Pi knows about, sorted by id. */
+function listProviders(session: AgentSession): ProviderInfo[] {
+  return providerInfos(session.modelRuntime.getProviders());
+}
 
-async function pickProvider(prompter: Prompter): Promise<string | undefined> {
-  console.log("Choose a provider to sign in to:");
-  SUGGESTED_PROVIDERS.forEach((p, i) => console.log(`  ${i + 1}) ${p.label}  (${p.id})`));
-  console.log("  or type a provider id directly");
-  const raw = await prompter.ask(`provider: `);
+async function pickProvider(
+  session: AgentSession,
+  prompter: Prompter,
+): Promise<string | undefined> {
+  const providers = listProviders(session);
+  const ids = providers.map((p) => p.id);
+  console.log("Providers Pi supports:");
+  for (const line of formatProviderColumns(ids)) console.log(`  ${line}`);
+  const raw = await prompter.ask(`\nprovider id: `);
   if (raw === EOF) return undefined;
-  return resolveProviderChoice(
-    raw,
-    SUGGESTED_PROVIDERS.map((p) => p.id),
-  );
+  const trimmed = raw.trim();
+  return trimmed || undefined;
 }
 
 /** /login — authenticate a provider. */
@@ -49,25 +52,32 @@ export async function loginCommand(
   prompter: Prompter,
   arg: string,
 ): Promise<void> {
-  const providerId = arg.trim() || (await pickProvider(prompter));
+  const providerId = arg.trim() || (await pickProvider(session, prompter));
   if (!providerId) {
     console.log("cancelled");
     return;
   }
 
   const runtime = session.modelRuntime;
-  const known = SUGGESTED_PROVIDERS.find((p) => p.id === providerId);
+  const provider = runtime.getProvider(providerId);
+  if (!provider) {
+    console.error(`unknown provider "${providerId}". Run /login with no argument to list them.`);
+    return;
+  }
 
-  // For Stage 1 we attempt api_key first. If the provider is OAuth-only this
-  // will surface as an error until Stage 2 wires the full subscription flow.
-  const authType: AuthType = known && !known.authTypes.includes("api_key") ? "oauth" : "api_key";
+  const info = providerInfos([provider])[0]!;
+  if (info.authTypes.length === 0) {
+    console.error(`provider "${providerId}" declares no supported auth methods.`);
+    return;
+  }
+  const authType = preferredAuthType(info);
 
   if (authType === "oauth") {
     console.log(
-      `\nNote: ${providerId} uses OAuth subscription sign-in, which is Stage 2 and not`,
+      `\nNote: ${info.name} uses OAuth sign-in, which is Stage 2 and not yet tested`,
     );
-    console.log("yet tested from pi-shell. Attempting anyway; if it fails, set an API key");
-    console.log("via environment variable instead (see README).\n");
+    console.log("from pi-shell. Attempting anyway; if it fails, set an API key via");
+    console.log("environment variable instead (see README).\n");
   }
 
   const controller = new AbortController();
@@ -97,7 +107,7 @@ export async function logoutCommand(
   prompter: Prompter,
   arg: string,
 ): Promise<void> {
-  const providerId = arg.trim() || (await pickProvider(prompter));
+  const providerId = arg.trim() || (await pickProvider(session, prompter));
   if (!providerId) {
     console.log("cancelled");
     return;
@@ -110,31 +120,25 @@ export async function logoutCommand(
   }
 }
 
-/** /auth — show credential and auth status. */
+/** /auth — show configured providers (stored credentials and ambient auth). */
 export async function authStatusCommand(session: AgentSession): Promise<void> {
   const runtime = session.modelRuntime;
-  const creds = await runtime.listCredentials();
+  const providers = listProviders(session);
 
-  if (creds.length === 0) {
-    console.log("no stored credentials");
-  } else {
-    console.log("stored credentials:");
-    for (const c of creds) {
-      const status = runtime.getProviderAuthStatus(c.providerId);
-      const src = status.source ? ` [${status.source}]` : "";
-      console.log(`  ${c.providerId}  (${c.type})${src}`);
-    }
+  const configured = providers
+    .map((p) => ({ ...p, status: runtime.getProviderAuthStatus(p.id) }))
+    .filter((p) => p.status.configured);
+
+  if (configured.length === 0) {
+    console.log("no configured providers — sign in with /login <provider>");
+    return;
   }
 
-  // Also show ambient-configured providers from the suggested set that have no
-  // stored credential but resolve via environment (e.g. Bedrock AWS profile).
-  console.log("\nprovider status:");
-  const width = Math.max(...SUGGESTED_PROVIDERS.map((p) => p.id.length));
-  for (const p of SUGGESTED_PROVIDERS) {
-    const status = runtime.getProviderAuthStatus(p.id);
-    const mark = status.configured ? "configured" : "not configured";
-    const src = status.source ? ` [${status.source}]` : "";
-    console.log(`  ${p.id.padEnd(width)}  ${mark}${src}`);
+  console.log("configured providers:");
+  const width = Math.max(...configured.map((p) => p.id.length));
+  for (const p of configured) {
+    const src = p.status.source ? ` [${p.status.source}]` : "";
+    console.log(`  ${p.id.padEnd(width)}  ${p.name}${src}`);
   }
 }
 
