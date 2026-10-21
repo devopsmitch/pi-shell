@@ -1,17 +1,13 @@
 /**
- * Terminal implementation of Pi's AuthInteraction contract.
+ * Terminal implementation of Pi's AuthInteraction contract, so login works
+ * without a TUI. ModelRuntime.login() calls back here for user prompts
+ * (text/secret/select/manual_code) and notifications
+ * (info/auth_url/device_code/progress), which we render via the shared
+ * Prompter and console.
  *
- * Pi's ModelRuntime.login() drives the provider login flow and calls back into
- * an AuthInteraction for anything that needs the user: prompts (text/secret/
- * select/manual_code) and notifications (info/auth_url/device_code/progress).
- *
- * The TUI implements this with dialog components; we implement it with the
- * shared Prompter and console output so pi-shell needs no TUI.
- *
- * Stage 1 focuses on API-key providers, which in practice use `secret` and
- * `select` prompts. The OAuth notify events (auth_url/device_code) and
- * manual_code prompts are implemented defensively so Stage 2 (OAuth
- * subscriptions) has a working baseline, but they are not yet tested live.
+ * Stage 1 covers API-key providers (secret/select). The OAuth events
+ * (auth_url/device_code/manual_code) are implemented defensively for Stage 2
+ * but not yet tested live.
  */
 import type { AuthEvent, AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
 import { EOF, type Prompter } from "./prompter.ts";
@@ -49,12 +45,7 @@ async function select(
   }
 }
 
-/**
- * Create an AuthInteraction backed by the shared terminal prompter.
- *
- * @param prompter Shared terminal prompter owned by the main loop.
- * @param signal   Aborts the whole login flow (e.g. on Ctrl+C).
- */
+/** Create an AuthInteraction backed by the shared terminal prompter. */
 export function createTerminalAuthInteraction(
   prompter: Prompter,
   signal?: AbortSignal,

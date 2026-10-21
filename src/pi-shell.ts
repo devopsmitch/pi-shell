@@ -20,6 +20,7 @@ import {
   modelCommand,
 } from "./commands.ts";
 import { modelLabel } from "./model-select.ts";
+import { toolActivityLabel } from "./activity.ts";
 import { createPrompter, EOF, type Prompter } from "./prompter.ts";
 
 const PROMPT = "> ";
@@ -33,22 +34,78 @@ function makeSessionManager(opts: Options): SessionManager {
   return SessionManager.continueRecent(cwd);
 }
 
-/** Subscribe to streamed assistant text and write it straight to stdout. */
+/**
+ * Subscribe to streamed assistant activity and render it. Answer text goes to
+ * stdout (clean and pipe-friendly); activity indicators (thinking, tool runs)
+ * go to stderr, one per line.
+ */
 function streamAssistantText(session: AgentSession): () => void {
+  // PI_SHELL_DEBUG=1 logs every event type to stderr (see logEvent).
+  const debug = Boolean(process.env.PI_SHELL_DEBUG);
+
+  // Each activity indicator is its own complete line on stderr, so nothing
+  // stacks. `status` writes one such line; `thinking` tracks the one open
+  // "thinking" line so it isn't repeated across deltas.
+  const status = (text: string): void => {
+    process.stderr.write(`\n· ${text}\n`);
+  };
+
+  let thinking = false;
+
   return session.subscribe((event) => {
-    if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent.type === "text_delta"
-    ) {
-      stdout.write(event.assistantMessageEvent.delta);
+    if (debug) logEvent(event);
+
+    switch (event.type) {
+      case "message_update": {
+        const inner = event.assistantMessageEvent;
+        if (inner.type === "text_delta") {
+          thinking = false;
+          stdout.write(inner.delta);
+        } else if (inner.type === "thinking_start" && !thinking) {
+          thinking = true;
+          status("thinking…");
+        }
+        break;
+      }
+      case "tool_execution_start": {
+        thinking = false;
+        status(toolActivityLabel(event.toolName, event.args));
+        break;
+      }
+      case "tool_execution_end": {
+        if (event.isError) status(`${event.toolName} failed`);
+        break;
+      }
     }
   });
 }
 
+/** PI_SHELL_DEBUG: one-line dump of an event to stderr. */
+function logEvent(event: { type: string; [k: string]: unknown }): void {
+  const parts: string[] = [event.type];
+  if (event.type === "message_update") {
+    const inner = (event as { assistantMessageEvent?: { type?: string } })
+      .assistantMessageEvent;
+    parts.push(`-> ${inner?.type ?? "?"}`);
+  }
+  if (
+    event.type === "tool_execution_start" ||
+    event.type === "tool_execution_update" ||
+    event.type === "tool_execution_end"
+  ) {
+    const e = event as { toolName?: string; isError?: boolean };
+    parts.push(`tool=${e.toolName ?? "?"}`);
+    if (event.type === "tool_execution_end") parts.push(`isError=${e.isError}`);
+  }
+  if (event.type === "agent_settled") {
+    parts.push(`aborted=${(event as { aborted?: boolean }).aborted}`);
+  }
+  process.stderr.write(`[event] ${parts.join(" ")}\n`);
+}
+
 /**
  * Mutable shell state shared with command handlers. `session` can be swapped
- * (e.g. by /new), so handlers read it through this object rather than closing
- * over a value.
+ * (e.g. by /new), so handlers read it through this object, not a closure.
  */
 interface ShellContext {
   session: AgentSession;
@@ -186,9 +243,7 @@ async function main(): Promise<void> {
       if (line === EOF) break;
       if (!line) continue;
 
-      // Locally handled slash commands (pi-shell owns these so no TUI is
-      // needed). A leading "/" with a known name dispatches here; anything
-      // else (including unknown /names) goes to the agent.
+      // Known "/name" dispatches locally; unknown /names fall through to Pi.
       if (line.startsWith("/")) {
         const [name, ...rest] = line.slice(1).split(/\s+/);
         const command = findCommand(name ?? "");

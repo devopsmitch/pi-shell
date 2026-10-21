@@ -1,10 +1,8 @@
 /**
- * A single shared terminal prompt, owned by the main loop.
- *
- * All input (the REPL prompt, command arguments, and auth prompts) goes through
- * one readline interface. Creating separate readline interfaces on the same
- * stdin closes the shared stream and breaks subsequent reads
- * (ERR_USE_AFTER_CLOSE), so commands must reuse this instead.
+ * A single shared terminal prompt, owned by the main loop. All input (REPL
+ * prompt, command args, auth prompts) goes through one readline interface:
+ * separate interfaces on the same stdin close the shared stream and break
+ * later reads (ERR_USE_AFTER_CLOSE).
  */
 import * as readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -31,9 +29,8 @@ export interface Prompter {
 }
 
 export function createPrompter(): Prompter {
-  // Only enable line-editing when attached to a real terminal. For piped or
-  // redirected input, a non-terminal interface reads lines cleanly without
-  // emitting cursor-control escape sequences.
+  // Line-editing only on a real terminal; piped input reads cleanly without
+  // cursor-control escape sequences.
   const isTTY = Boolean(stdin.isTTY);
   const rl = readline.createInterface({
     input: stdin,
@@ -46,9 +43,8 @@ export function createPrompter(): Prompter {
 
   rl.on("close", () => {
     closed = true;
-    // If a question is in flight when stdin closes (EOF/Ctrl+D), rl.question()
-    // never settles. Abort it so the pending ask()/askSecret() resolves to EOF
-    // instead of hanging forever.
+    // A question in flight when stdin closes never settles; abort it so the
+    // pending ask() resolves to EOF instead of hanging.
     controller?.abort();
   });
 
@@ -66,22 +62,15 @@ export function createPrompter(): Prompter {
   ): Promise<string | typeof EOF> {
     if (closed) return EOF;
 
-    // Mask typed characters for secrets by overriding how readline echoes
-    // input.
-    //
-    // NOTE: `_writeToOutput` is a private, undocumented readline method. There
-    // is no public API for masked input in node:readline, so this is the
-    // conventional workaround. It is fragile across Node versions (a rename
-    // would silently disable masking) and is therefore guarded to TTY only and
-    // restored in `finally`. No feedback characters (e.g. "*") are shown; the
-    // input is simply not echoed. If this breaks, prefer an env var or
-    // `/login`-free credential setup over echoing the secret.
+    // Mask secrets by overriding readline's echo. `_writeToOutput` is a
+    // private, undocumented method — the only way to suppress echo in
+    // node:readline. Fragile across Node versions, so it's TTY-only and
+    // restored in `finally`. Typed characters are hidden (no "*" shown).
     const masked = rl as unknown as { _writeToOutput?: (s: string) => void };
     const original = masked._writeToOutput?.bind(rl);
     if (opts?.secret && isTTY) {
       masked._writeToOutput = (s: string) => {
-        // Let the prompt text and control sequences (newline/return) through;
-        // suppress ordinary typed characters so the secret is not echoed.
+        // Let prompt text and newlines through; suppress typed characters.
         if (s === message || s.includes("\n") || s.includes("\r")) {
           original?.(s);
         }
