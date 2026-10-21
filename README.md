@@ -11,9 +11,10 @@ started with `--new` or `--in-memory`.
 ## Requirements
 
 - Node.js 24+
-- A configured Pi provider/credentials. If you haven't set one up, run `pi`
-  once and use `/login`, or configure an API key. pi-shell reuses Pi's standard
-  settings, credentials, and resource discovery.
+- A configured Pi provider/credential. Sign in from pi-shell with
+  `/login <provider>` (API-key providers), set an API-key env var before
+  launch, or use ambient cloud credentials (e.g. an AWS profile for Bedrock).
+  pi-shell reuses Pi's standard settings, credentials, and resource discovery.
 
 ## Install
 
