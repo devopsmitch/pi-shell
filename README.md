@@ -86,16 +86,28 @@ Built on the Pi TypeScript SDK (`@earendil-works/pi-coding-agent`):
 
 ### Extensions
 
-Pi extension packages installed with npm are picked up automatically. At
-startup pi-shell scans `node_modules` in the current working directory for
-packages whose `package.json` declares `"pi": { "extensions": [...] }` and
-loads those entry points, so for example `npm install pi-provider-kiro` makes
-`kiro` appear in `/login` with no further configuration. Extensions listed in
-Pi's global `settings.json` are loaded as well.
+pi-shell loads Pi extension packages the same way Pi itself does, including
+model providers. For an extra you only need in some projects, install it
+personally once with Pi's package manager:
+
+```bash
+pi install npm:pi-provider-kiro
+```
+
+That installs it under `~/.pi/agent` and records it in Pi's settings, so every
+pi-shell session (and the regular `pi` TUI) picks it up, with no dependency on
+the current project's `node_modules` and no `pi-provider-kiro` listed in
+pi-shell's own `package.json`.
+
+pi-shell also scans `node_modules` in the current working directory at
+startup, for packages whose `package.json` declares
+`"pi": { "extensions": [...] }`, and loads those entry points too. Use this if
+you'd rather add the extension as a per-project `npm install` dependency
+instead of a personal `pi install`.
 
 Extensions run with your full permissions, so only install packages you trust.
-The auto-discovery only reads packages that are already in `node_modules`; it
-never installs anything.
+The auto-discovery only reads packages that are already installed; it never
+installs anything itself.
 
 ## Development
 
