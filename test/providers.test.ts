@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Provider } from "@earendil-works/pi-ai";
 import {
+  authMethodOptions,
   formatProviderColumns,
-  preferredAuthType,
   providerInfos,
   toProviderInfo,
 } from "../src/providers.ts";
@@ -65,15 +65,26 @@ describe("providerInfos", () => {
   });
 });
 
-describe("preferredAuthType", () => {
-  it("returns the first supported method", () => {
-    expect(preferredAuthType({ id: "x", name: "X", authTypes: ["oauth", "api_key"] })).toBe(
-      "oauth",
-    );
+describe("authMethodOptions", () => {
+  it("labels api_key plainly and oauth by its display name", () => {
+    const info = toProviderInfo(provider("kiro", "Kiro", { apiKey: true, oauth: true }));
+    expect(authMethodOptions(info)).toEqual([
+      { id: "api_key", label: "API key" },
+      { id: "oauth", label: "Kiro OAuth" },
+    ]);
   });
 
-  it("defaults to api_key when none are listed", () => {
-    expect(preferredAuthType({ id: "x", name: "X", authTypes: [] })).toBe("api_key");
+  it("keeps the provider's auth-type order", () => {
+    const info = toProviderInfo(
+      provider("anthropic", "Anthropic", { apiKey: true, oauth: true, subscription: true }),
+    );
+    expect(authMethodOptions(info).map((o) => o.id)).toEqual(["oauth", "api_key"]);
+  });
+
+  it("falls back to a generic oauth label when the name is missing", () => {
+    expect(authMethodOptions({ id: "x", name: "X", authTypes: ["oauth"] })).toEqual([
+      { id: "oauth", label: "OAuth" },
+    ]);
   });
 });
 

@@ -3,11 +3,8 @@
  * without a TUI. ModelRuntime.login() calls back here for user prompts
  * (text/secret/select/manual_code) and notifications
  * (info/auth_url/device_code/progress), which we render via the shared
- * Prompter and console.
- *
- * Stage 1 covers API-key providers (secret/select). The OAuth events
- * (auth_url/device_code/manual_code) are implemented defensively for Stage 2
- * but not yet tested live.
+ * Prompter and console. Verified live for API keys and Kiro's device-code
+ * flow; other OAuth flows (browser callback, manual_code) are untested.
  */
 import type { AuthEvent, AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
 import { EOF, type Prompter } from "./prompter.ts";
@@ -20,12 +17,12 @@ export class AuthCancelled extends Error {
   }
 }
 
-/** Present a numbered menu and return the selected option id. */
-async function select(
+/** Present a numbered menu and return the selected option id. Throws AuthCancelled on EOF. */
+export async function select<T extends string>(
   prompter: Prompter,
   message: string,
-  options: readonly { id: string; label: string; description?: string }[],
-): Promise<string> {
+  options: readonly { id: T; label: string; description?: string }[],
+): Promise<T> {
   console.log(message);
   options.forEach((opt, i) => {
     const desc = opt.description ? ` — ${opt.description}` : "";

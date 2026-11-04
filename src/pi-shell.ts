@@ -7,11 +7,9 @@
  * runs, unless started with --new or --in-memory).
  */
 import {
-  createAgentSession,
-  DefaultResourceLoader,
-  getAgentDir,
+  createAgentSessionFromServices,
+  createAgentSessionServices,
   SessionManager,
-  SettingsManager,
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
 import { stdin, stdout } from "node:process";
@@ -22,13 +20,27 @@ import {
   logoutCommand,
   modelCommand,
 } from "./commands.ts";
-import { discoverNodeModulesExtensions } from "./extensions.ts";
 import { modelLabel } from "./model-select.ts";
 import { toolActivityLabel } from "./activity.ts";
 import { formatUsage } from "./usage.ts";
 import { createPrompter, EOF, type Prompter } from "./prompter.ts";
 
 const PROMPT = "> ";
+
+/**
+ * Build a session via the services path so extension providers (e.g. kiro) are
+ * registered before the saved model is restored. Plain createAgentSession
+ * restores first, so resuming a kiro/auto session fell back to the default.
+ */
+async function startSession(
+  sessionManager: SessionManager,
+): Promise<{ session: AgentSession; modelFallbackMessage?: string }> {
+  const services = await createAgentSessionServices({ cwd: process.cwd() });
+  for (const d of services.diagnostics) {
+    process.stderr.write(`${d.type}: ${d.message}\n`);
+  }
+  return createAgentSessionFromServices({ services, sessionManager });
+}
 
 /** Choose how session history is stored based on CLI flags. */
 function makeSessionManager(opts: Options): SessionManager {
@@ -133,7 +145,7 @@ const COMMANDS: readonly Command[] = [
   {
     name: "login",
     usage: "[provider]",
-    description: "sign in to a provider (API key)",
+    description: "sign in to a provider",
     run: (ctx, arg) => loginCommand(ctx.session, ctx.prompter, arg),
   },
   {
@@ -168,9 +180,7 @@ const COMMANDS: readonly Command[] = [
     name: "new",
     description: "start a fresh session",
     run: async (ctx) => {
-      const { session } = await createAgentSession({
-        sessionManager: SessionManager.create(process.cwd()),
-      });
+      const { session } = await startSession(SessionManager.create(process.cwd()));
       ctx.replaceSession(session);
       console.log("started a new session\n");
     },
@@ -226,25 +236,7 @@ function printHelp(): void {
 async function main(): Promise<void> {
   const opts = parseOptions(process.argv.slice(2));
 
-  // Discover Pi extension packages (e.g. pi-provider-kiro) from node_modules
-  // so they register their providers before session creation.
-  const cwd = process.cwd();
-  const agentDir = getAgentDir();
-  const extensionPaths = discoverNodeModulesExtensions(cwd);
-  const settingsManager = SettingsManager.create(cwd, agentDir);
-  const resourceLoader = new DefaultResourceLoader({
-    cwd,
-    agentDir,
-    settingsManager,
-    additionalExtensionPaths: extensionPaths,
-  });
-  await resourceLoader.reload();
-
-  const { session, modelFallbackMessage } = await createAgentSession({
-    sessionManager: makeSessionManager(opts),
-    resourceLoader,
-    settingsManager,
-  });
+  const { session, modelFallbackMessage } = await startSession(makeSessionManager(opts));
   let unsubscribe = streamAssistantText(session);
 
   printBanner(session, opts, modelFallbackMessage);

@@ -1,18 +1,11 @@
-/**
- * Stage 1 auth/model commands for pi-shell, built on ModelRuntime.
- *
- *   /login [provider]   authenticate a provider (API key via terminal prompts)
- *   /logout [provider]  remove a stored credential
- *   /auth               show credential/auth status
- *   /model [query]      list or switch the active model
- *
- * OAuth subscription sign-in (Claude Pro, ChatGPT) is Stage 2; API-key login
- * works here for every API-key provider, and Bedrock/Gemini/OpenRouter resolve
- * via API keys or ambient credentials.
- */
+/** Auth and model commands (/login, /logout, /auth, /model), built on ModelRuntime. */
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { type Api, type AuthType, type Model } from "@earendil-works/pi-ai";
-import { AuthCancelled, createTerminalAuthInteraction } from "./auth-interaction.ts";
+import {
+  AuthCancelled,
+  createTerminalAuthInteraction,
+  select,
+} from "./auth-interaction.ts";
 import {
   hasRealModel,
   matchModels,
@@ -20,6 +13,7 @@ import {
   sameModel,
 } from "./model-select.ts";
 import {
+  authMethodOptions,
   formatProviderColumns,
   providerInfos,
   type ProviderInfo,
@@ -74,24 +68,15 @@ export async function loginCommand(
   if (info.authTypes.length === 1) {
     authType = info.authTypes[0]!;
   } else {
-    // Multiple auth methods — let the user choose.
-    const labels: Record<AuthType, string> = {
-      api_key: "API key",
-      oauth: info.oauthName ?? "OAuth",
-    };
-    console.log("auth methods:");
-    info.authTypes.forEach((t, i) => console.log(`  ${i + 1}) ${labels[t]}`));
-    const raw = await prompter.ask(`select [1-${info.authTypes.length}]: `);
-    if (raw === EOF) {
-      console.log("cancelled");
-      return;
+    try {
+      authType = await select(prompter, "auth methods:", authMethodOptions(info));
+    } catch (err) {
+      if (err instanceof AuthCancelled) {
+        console.log("cancelled");
+        return;
+      }
+      throw err;
     }
-    const n = Number.parseInt(raw, 10);
-    if (!Number.isInteger(n) || n < 1 || n > info.authTypes.length) {
-      console.log("invalid selection");
-      return;
-    }
-    authType = info.authTypes[n - 1]!;
   }
 
   const controller = new AbortController();

@@ -37,9 +37,12 @@ export function providerInfos(providers: readonly Provider[]): ProviderInfo[] {
   return providers.map(toProviderInfo).sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** The login auth type to attempt for a provider (its first supported method). */
-export function preferredAuthType(info: ProviderInfo): AuthType {
-  return info.authTypes[0] ?? "api_key";
+/** Menu entries for choosing between a provider's auth methods; ids are the auth types. */
+export function authMethodOptions(info: ProviderInfo): { id: AuthType; label: string }[] {
+  return info.authTypes.map((id) => ({
+    id,
+    label: id === "oauth" ? (info.oauthName ?? "OAuth") : "API key",
+  }));
 }
 
 /**
