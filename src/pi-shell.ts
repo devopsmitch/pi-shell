@@ -25,6 +25,7 @@ import {
 import { discoverNodeModulesExtensions } from "./extensions.ts";
 import { modelLabel } from "./model-select.ts";
 import { toolActivityLabel } from "./activity.ts";
+import { formatUsage } from "./usage.ts";
 import { createPrompter, EOF, type Prompter } from "./prompter.ts";
 
 const PROMPT = "> ";
@@ -153,6 +154,17 @@ const COMMANDS: readonly Command[] = [
     run: (ctx, arg) => modelCommand(ctx.session, arg),
   },
   {
+    name: "usage",
+    description: "show token usage and estimated cost for this session",
+    run: (ctx) => {
+      const model = ctx.session.model;
+      const priced = Boolean(model && (model.cost.input > 0 || model.cost.output > 0));
+      for (const line of formatUsage(ctx.session.getSessionStats(), priced)) {
+        console.log(line);
+      }
+    },
+  },
+  {
     name: "new",
     description: "start a fresh session",
     run: async (ctx) => {
@@ -181,7 +193,11 @@ function findCommand(name: string): Command | undefined {
   return COMMANDS.find((c) => c.name === name || c.aliases?.includes(name));
 }
 
-function printBanner(session: AgentSession, opts: Options): void {
+function printBanner(
+  session: AgentSession,
+  opts: Options,
+  modelFallbackMessage?: string,
+): void {
   const mode = opts.inMemory
     ? "in-memory (not saved)"
     : (session.sessionFile ?? "new session");
@@ -189,6 +205,9 @@ function printBanner(session: AgentSession, opts: Options): void {
   console.log("pi-shell — minimal Pi interface");
   console.log(`session: ${mode}`);
   console.log(`model:   ${model}`);
+  // Pi reports when it could not restore the session's saved model and fell
+  // back to another; surface it so the switch is not silent.
+  if (modelFallbackMessage) process.stderr.write(`warning: ${modelFallbackMessage}\n`);
   console.log("type /help for commands\n");
 }
 
@@ -221,14 +240,14 @@ async function main(): Promise<void> {
   });
   await resourceLoader.reload();
 
-  const { session } = await createAgentSession({
+  const { session, modelFallbackMessage } = await createAgentSession({
     sessionManager: makeSessionManager(opts),
     resourceLoader,
     settingsManager,
   });
   let unsubscribe = streamAssistantText(session);
 
-  printBanner(session, opts);
+  printBanner(session, opts, modelFallbackMessage);
 
   const prompter = createPrompter();
 
