@@ -11,7 +11,7 @@
  * via API keys or ambient credentials.
  */
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { type Api, type Model } from "@earendil-works/pi-ai";
+import { type Api, type AuthType, type Model } from "@earendil-works/pi-ai";
 import { AuthCancelled, createTerminalAuthInteraction } from "./auth-interaction.ts";
 import {
   hasRealModel,
@@ -21,7 +21,6 @@ import {
 } from "./model-select.ts";
 import {
   formatProviderColumns,
-  preferredAuthType,
   providerInfos,
   type ProviderInfo,
 } from "./providers.ts";
@@ -70,14 +69,29 @@ export async function loginCommand(
     console.error(`provider "${providerId}" declares no supported auth methods.`);
     return;
   }
-  const authType = preferredAuthType(info);
 
-  if (authType === "oauth") {
-    console.log(
-      `\nNote: ${info.name} uses OAuth sign-in, which is Stage 2 and not yet tested`,
-    );
-    console.log("from pi-shell. Attempting anyway; if it fails, set an API key via");
-    console.log("environment variable instead (see README).\n");
+  let authType: AuthType;
+  if (info.authTypes.length === 1) {
+    authType = info.authTypes[0]!;
+  } else {
+    // Multiple auth methods — let the user choose.
+    const labels: Record<AuthType, string> = {
+      api_key: "API key",
+      oauth: info.oauthName ?? "OAuth",
+    };
+    console.log("auth methods:");
+    info.authTypes.forEach((t, i) => console.log(`  ${i + 1}) ${labels[t]}`));
+    const raw = await prompter.ask(`select [1-${info.authTypes.length}]: `);
+    if (raw === EOF) {
+      console.log("cancelled");
+      return;
+    }
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isInteger(n) || n < 1 || n > info.authTypes.length) {
+      console.log("invalid selection");
+      return;
+    }
+    authType = info.authTypes[n - 1]!;
   }
 
   const controller = new AbortController();

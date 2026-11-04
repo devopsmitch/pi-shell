@@ -13,6 +13,8 @@ export interface ProviderInfo {
   name: string;
   /** Auth methods the provider supports, in preference order. */
   authTypes: AuthType[];
+  /** Display name of the OAuth method, if available. */
+  oauthName?: string;
 }
 
 /** Distil a Provider into the id/name/authTypes pi-shell uses. */
@@ -22,7 +24,12 @@ export function toProviderInfo(provider: Provider): ProviderInfo {
   if (provider.auth.oauth?.isSubscription) authTypes.push("oauth");
   if (provider.auth.apiKey) authTypes.push("api_key");
   if (provider.auth.oauth && !authTypes.includes("oauth")) authTypes.push("oauth");
-  return { id: provider.id, name: provider.name, authTypes };
+  return {
+    id: provider.id,
+    name: provider.name,
+    authTypes,
+    oauthName: provider.auth.oauth?.name,
+  };
 }
 
 /** Distil and sort a provider list by id for stable display. */

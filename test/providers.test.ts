@@ -27,15 +27,15 @@ function provider(
 
 describe("toProviderInfo", () => {
   it("reports api_key only", () => {
-    expect(toProviderInfo(provider("groq", "Groq", { apiKey: true })).authTypes).toEqual([
-      "api_key",
-    ]);
+    const info = toProviderInfo(provider("groq", "Groq", { apiKey: true }));
+    expect(info.authTypes).toEqual(["api_key"]);
+    expect(info.oauthName).toBeUndefined();
   });
 
   it("reports oauth only", () => {
-    expect(
-      toProviderInfo(provider("openai-codex", "Codex", { oauth: true })).authTypes,
-    ).toEqual(["oauth"]);
+    const info = toProviderInfo(provider("openai-codex", "Codex", { oauth: true }));
+    expect(info.authTypes).toEqual(["oauth"]);
+    expect(info.oauthName).toBe("Codex OAuth");
   });
 
   it("prefers oauth first for subscription providers", () => {
@@ -43,6 +43,7 @@ describe("toProviderInfo", () => {
       provider("anthropic", "Anthropic", { apiKey: true, oauth: true, subscription: true }),
     );
     expect(info.authTypes).toEqual(["oauth", "api_key"]);
+    expect(info.oauthName).toBe("Anthropic OAuth");
   });
 
   it("prefers api_key first when oauth is not a subscription", () => {
@@ -50,6 +51,7 @@ describe("toProviderInfo", () => {
       provider("openrouter", "OpenRouter", { apiKey: true, oauth: true }),
     );
     expect(info.authTypes).toEqual(["api_key", "oauth"]);
+    expect(info.oauthName).toBe("OpenRouter OAuth");
   });
 });
 
