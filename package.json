@@ -19,7 +19,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "1.2.0"
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "pi-provider-kiro": "^0.12.3"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

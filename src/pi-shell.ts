@@ -8,10 +8,13 @@
  */
 import {
   createAgentSession,
+  DefaultResourceLoader,
+  getAgentDir,
   SessionManager,
+  SettingsManager,
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
-import { stdout } from "node:process";
+import { stdin, stdout } from "node:process";
 import { parseOptions, type Options } from "./args.ts";
 import {
   authStatusCommand,
@@ -19,6 +22,7 @@ import {
   logoutCommand,
   modelCommand,
 } from "./commands.ts";
+import { discoverNodeModulesExtensions } from "./extensions.ts";
 import { modelLabel } from "./model-select.ts";
 import { toolActivityLabel } from "./activity.ts";
 import { createPrompter, EOF, type Prompter } from "./prompter.ts";
@@ -203,8 +207,24 @@ function printHelp(): void {
 async function main(): Promise<void> {
   const opts = parseOptions(process.argv.slice(2));
 
+  // Discover Pi extension packages (e.g. pi-provider-kiro) from node_modules
+  // so they register their providers before session creation.
+  const cwd = process.cwd();
+  const agentDir = getAgentDir();
+  const extensionPaths = discoverNodeModulesExtensions(cwd);
+  const settingsManager = SettingsManager.create(cwd, agentDir);
+  const resourceLoader = new DefaultResourceLoader({
+    cwd,
+    agentDir,
+    settingsManager,
+    additionalExtensionPaths: extensionPaths,
+  });
+  await resourceLoader.reload();
+
   const { session } = await createAgentSession({
     sessionManager: makeSessionManager(opts),
+    resourceLoader,
+    settingsManager,
   });
   let unsubscribe = streamAssistantText(session);
 
@@ -235,6 +255,24 @@ async function main(): Promise<void> {
       stdout.write("\n");
       prompter.cancel();
     }
+  });
+
+  // Ctrl+Z at the idle prompt: in raw mode the tty's VSUSP is off, so readline
+  // emits an "rl" SIGTSTP event instead of the OS suspending us. We handle it:
+  // don't pause stdin first (or SIGCONT never fires), and raise SIGTSTP (not
+  // SIGSTOP) so `fg` works.
+  prompter.rl.on("SIGTSTP", () => {
+    if (stdin.isTTY) stdin.setRawMode(false);
+    // Signal pid 0 (the whole process group): under `tsx` the foreground job
+    // is several node processes, so signaling only our pid takes two presses.
+    process.kill(0, "SIGTSTP");
+  });
+
+  // Resume: restore raw mode and redraw the prompt (fires on fg because we
+  // didn't pause stdin before suspending).
+  process.on("SIGCONT", () => {
+    if (stdin.isTTY) stdin.setRawMode(true);
+    prompter.rl.prompt();
   });
 
   try {
