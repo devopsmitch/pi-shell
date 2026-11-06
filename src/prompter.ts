@@ -6,6 +6,7 @@
  */
 import * as readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import type { Completer } from "./completion.ts";
 
 /**
  * Returned by ask()/askSecret() when a line cannot be read: end-of-file
@@ -16,7 +17,7 @@ export const EOF = Symbol("eof");
 
 export interface Prompter {
   /** Read a line of input after printing `message`. EOF resolves to the EOF symbol. */
-  ask(message: string): Promise<string | typeof EOF>;
+  ask(message: string, completer?: Completer): Promise<string | typeof EOF>;
   /** Read a line without echoing typed characters (for secrets). */
   askSecret(message: string): Promise<string | typeof EOF>;
   /** The underlying interface, for attaching SIGINT and resize listeners. */
@@ -32,10 +33,19 @@ export function createPrompter(): Prompter {
   // Line-editing only on a real terminal; piped input reads cleanly without
   // cursor-control escape sequences.
   const isTTY = Boolean(stdin.isTTY);
+
+  // readline fixes its completer at construction, so delegate to a swappable
+  // slot set per ask() call (undefined = no completion for that prompt).
+  let activeCompleter: Completer | undefined;
+  const completer = (line: string): [string[], string] | Promise<[string[], string]> => {
+    return activeCompleter ? activeCompleter({ line }) : [[], line];
+  };
+
   const rl = readline.createInterface({
     input: stdin,
     output: stdout,
     terminal: isTTY,
+    completer: isTTY ? completer : undefined,
   });
 
   let closed = false;
@@ -58,9 +68,11 @@ export function createPrompter(): Prompter {
 
   async function askLine(
     message: string,
-    opts?: { secret?: boolean },
+    opts?: { secret?: boolean; completer?: Completer },
   ): Promise<string | typeof EOF> {
     if (closed) return EOF;
+
+    activeCompleter = opts?.completer;
 
     // Mask secrets by overriding readline's echo. `_writeToOutput` is a
     // private, undocumented method — the only way to suppress echo in
@@ -87,6 +99,7 @@ export function createPrompter(): Prompter {
       throw err;
     } finally {
       controller = undefined;
+      activeCompleter = undefined;
       if (opts?.secret && isTTY) masked._writeToOutput = original;
     }
   }
@@ -98,8 +111,8 @@ export function createPrompter(): Prompter {
       return closed;
     },
 
-    ask(message: string): Promise<string | typeof EOF> {
-      return askLine(message);
+    ask(message: string, completer?: Completer): Promise<string | typeof EOF> {
+      return askLine(message, { completer });
     },
 
     askSecret(message: string): Promise<string | typeof EOF> {

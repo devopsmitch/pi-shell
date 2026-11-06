@@ -25,6 +25,7 @@ import { modelLabel } from "./model-select.ts";
 import { toolActivityLabel } from "./activity.ts";
 import { formatUsage } from "./usage.ts";
 import { createPrompter, EOF, type Prompter } from "./prompter.ts";
+import { makeFsListDir, makeReplCompleter } from "./completion.ts";
 
 const PROMPT = "> ";
 
@@ -284,6 +285,7 @@ async function main(): Promise<void> {
   printBanner(session, opts, modelFallbackMessage);
 
   const prompter = createPrompter();
+  const replCompleter = makeReplCompleter(makeFsListDir(process.cwd()));
 
   const ctx: ShellContext = {
     session,
@@ -330,7 +332,7 @@ async function main(): Promise<void> {
 
   try {
     for (;;) {
-      const line = await prompter.ask(PROMPT);
+      const line = await prompter.ask(PROMPT, replCompleter);
       if (line === EOF) break;
       if (!line) continue;
 
