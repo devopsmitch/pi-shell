@@ -20,7 +20,7 @@ import {
   logoutCommand,
   modelCommand,
 } from "./commands.ts";
-import { deleteCommand, sessionsCommand } from "./sessions.ts";
+import { deleteCommand, resumeCommand, sessionsCommand } from "./sessions.ts";
 import { modelLabel } from "./model-select.ts";
 import { toolActivityLabel } from "./activity.ts";
 import { formatUsage } from "./usage.ts";
@@ -187,6 +187,35 @@ const COMMANDS: readonly Command[] = [
       ),
   },
   {
+    name: "resume",
+    usage: "[number]",
+    description: "switch to a saved session (e.g. 1), or pick from a list",
+    run: async (ctx, arg) => {
+      const path = await resumeCommand(
+        ctx.prompter,
+        arg,
+        ctx.session.sessionFile,
+        ctx.session.sessionManager.getSessionDir(),
+      );
+      if (!path) return;
+      const { session, modelFallbackMessage } = await startSession(
+        SessionManager.open(path),
+      );
+      ctx.replaceSession(session);
+      if (modelFallbackMessage) process.stderr.write(`warning: ${modelFallbackMessage}\n`);
+      console.log(`resumed ${session.sessionFile ?? path}\n`);
+    },
+  },
+  {
+    name: "new",
+    description: "start a fresh session",
+    run: async (ctx) => {
+      const { session } = await startSession(SessionManager.create(process.cwd()));
+      ctx.replaceSession(session);
+      console.log("started a new session\n");
+    },
+  },
+  {
     name: "delete",
     usage: "[selection]",
     description: "delete saved sessions (e.g. 2, 1 3, 2-5, all)",
@@ -197,15 +226,6 @@ const COMMANDS: readonly Command[] = [
         ctx.session.sessionFile,
         ctx.session.sessionManager.getSessionDir(),
       ),
-  },
-  {
-    name: "new",
-    description: "start a fresh session",
-    run: async (ctx) => {
-      const { session } = await startSession(SessionManager.create(process.cwd()));
-      ctx.replaceSession(session);
-      console.log("started a new session\n");
-    },
   },
   {
     name: "help",

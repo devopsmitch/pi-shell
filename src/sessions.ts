@@ -54,6 +54,18 @@ export function parseSelection(raw: string, count: number): number[] | null {
   return picked.size === 0 ? null : [...picked].sort((a, b) => a - b);
 }
 
+/**
+ * Parse a single-index selection ("2") against a list length. Returns the
+ * zero-based index, or null if it is not a single valid in-range number.
+ * Unlike parseSelection, this rejects ranges, lists, and "all".
+ */
+export function parseSingleIndex(raw: string, count: number): number | null {
+  const trimmed = raw.trim();
+  const n = Number.parseInt(trimmed, 10);
+  if (!Number.isInteger(n) || String(n) !== trimmed || n < 1 || n > count) return null;
+  return n - 1;
+}
+
 /** Predicate: is this the session currently open in the shell? */
 export type IsActive = (info: SessionInfo) => boolean;
 
@@ -98,7 +110,68 @@ export async function sessionsCommand(
   }
 
   printSessions(sessions, makeIsActive(activeSessionFile));
-  console.log("\ndelete some with: /delete");
+  console.log("\nresume one with: /resume   ·   delete some with: /delete");
+}
+
+/**
+ * /resume — switch to a previously saved session. With an index argument
+ * ("/resume 2") it opens that session directly; with no argument it lists the
+ * sessions and prompts for one. Returns the path of the session to open, or
+ * undefined if there is nothing to do (no sessions, cancelled, bad input, or
+ * the chosen session is already active).
+ */
+export async function resumeCommand(
+  prompter: Prompter,
+  arg: string,
+  activeSessionFile: string | undefined,
+  sessionDir: string | undefined,
+): Promise<string | undefined> {
+  let sessions: SessionInfo[];
+  try {
+    sessions = await loadSessions(sessionDir);
+  } catch (err) {
+    console.error(`could not list sessions: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  }
+
+  if (sessions.length === 0) {
+    console.log("no saved sessions for this directory");
+    return undefined;
+  }
+
+  const isActive = makeIsActive(activeSessionFile);
+
+  // With an index argument, resolve it directly. Otherwise list and prompt.
+  let index: number | null;
+  const selection = arg.trim();
+  if (selection) {
+    index = parseSingleIndex(selection, sessions.length);
+    if (index === null) {
+      console.log(`"${selection}" is not a valid session number (1-${sessions.length})`);
+      return undefined;
+    }
+  } else {
+    printSessions(sessions, isActive);
+    const raw = await prompter.ask(
+      `\nresume which? (1-${sessions.length}; blank to cancel): `,
+    );
+    if (raw === EOF) {
+      console.log("cancelled");
+      return undefined;
+    }
+    index = parseSingleIndex(raw, sessions.length);
+    if (index === null) {
+      console.log(raw.trim() ? "not a valid session number; cancelled" : "cancelled");
+      return undefined;
+    }
+  }
+
+  const chosen = sessions[index]!;
+  if (isActive(chosen)) {
+    console.log("that session is already active");
+    return undefined;
+  }
+  return chosen.path;
 }
 
 /**

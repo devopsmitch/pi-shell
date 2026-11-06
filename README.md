@@ -51,9 +51,12 @@ Typed at the `> ` prompt:
   prices, covers this session only, and will not match your provider bill.
   Models without per-token pricing (e.g. Kiro, which bills in credits) show
   cost as n/a.
-- `/new` — start a fresh persistent session.
 - `/sessions` — list saved sessions for this directory (newest first), with a
   preview of each. The currently-active session is marked `*`.
+- `/resume [number]` — switch to a previously saved session. With a number it
+  opens that session directly (`/resume 1`); with no argument it lists the
+  sessions and prompts for one. Resuming the already-active session is a no-op.
+- `/new` — start a fresh persistent session.
 - `/delete [selection]` — delete saved sessions. With a selection it removes
   them directly: a single index (`/delete 2`), several (`/delete 1 3`), a range
   (`/delete 2-5`), or `/delete all`. With no argument it lists the sessions and

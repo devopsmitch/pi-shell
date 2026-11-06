@@ -3,6 +3,7 @@ import type { SessionInfo } from "@earendil-works/pi-coding-agent";
 import {
   formatSessionLine,
   parseSelection,
+  parseSingleIndex,
   planDeletion,
   sessionPreview,
   sortByRecent,
@@ -99,6 +100,28 @@ describe("parseSelection", () => {
     expect(parseSelection("6", 5)).toBeNull();
     expect(parseSelection("0", 5)).toBeNull();
     expect(parseSelection("1-9", 5)).toBeNull();
+  });
+});
+
+describe("parseSingleIndex", () => {
+  it("parses a single in-range number to a zero-based index", () => {
+    expect(parseSingleIndex("1", 5)).toBe(0);
+    expect(parseSingleIndex(" 3 ", 5)).toBe(2);
+  });
+
+  it("rejects out-of-range, zero, and negatives", () => {
+    expect(parseSingleIndex("0", 5)).toBeNull();
+    expect(parseSingleIndex("6", 5)).toBeNull();
+    expect(parseSingleIndex("-1", 5)).toBeNull();
+  });
+
+  it("rejects ranges, lists, 'all', and non-numbers", () => {
+    expect(parseSingleIndex("", 5)).toBeNull();
+    expect(parseSingleIndex("2-4", 5)).toBeNull();
+    expect(parseSingleIndex("1 2", 5)).toBeNull();
+    expect(parseSingleIndex("all", 5)).toBeNull();
+    expect(parseSingleIndex("1.5", 5)).toBeNull();
+    expect(parseSingleIndex("x", 5)).toBeNull();
   });
 });
 
