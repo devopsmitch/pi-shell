@@ -20,6 +20,7 @@ import {
   logoutCommand,
   modelCommand,
 } from "./commands.ts";
+import { deleteCommand, sessionsCommand } from "./sessions.ts";
 import { modelLabel } from "./model-select.ts";
 import { toolActivityLabel } from "./activity.ts";
 import { formatUsage } from "./usage.ts";
@@ -175,6 +176,27 @@ const COMMANDS: readonly Command[] = [
         console.log(line);
       }
     },
+  },
+  {
+    name: "sessions",
+    description: "list saved sessions for this directory",
+    run: (ctx) =>
+      sessionsCommand(
+        ctx.session.sessionFile,
+        ctx.session.sessionManager.getSessionDir(),
+      ),
+  },
+  {
+    name: "delete",
+    usage: "[selection]",
+    description: "delete saved sessions (e.g. 2, 1 3, 2-5, all)",
+    run: (ctx, arg) =>
+      deleteCommand(
+        ctx.prompter,
+        arg,
+        ctx.session.sessionFile,
+        ctx.session.sessionManager.getSessionDir(),
+      ),
   },
   {
     name: "new",

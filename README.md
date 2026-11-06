@@ -52,6 +52,13 @@ Typed at the `> ` prompt:
   Models without per-token pricing (e.g. Kiro, which bills in credits) show
   cost as n/a.
 - `/new` — start a fresh persistent session.
+- `/sessions` — list saved sessions for this directory (newest first), with a
+  preview of each. The currently-active session is marked `*`.
+- `/delete [selection]` — delete saved sessions. With a selection it removes
+  them directly: a single index (`/delete 2`), several (`/delete 1 3`), a range
+  (`/delete 2-5`), or `/delete all`. With no argument it lists the sessions and
+  prompts for which to remove. The currently-active session is never deleted.
+  Deletion removes the session's JSONL file from disk and cannot be undone.
 - `/help` — show commands.
 - `/exit` or `/quit` — leave. `Ctrl+D` (EOF) also exits.
 
