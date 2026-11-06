@@ -9,7 +9,7 @@
     "node": ">=24"
   },
   "bin": {
-    "pi-shell": "./src/pi-shell.ts"
+    "pi-shell": "./bin/pi-shell.mjs"
   },
   "scripts": {
     "start": "tsx src/pi-shell.ts",
